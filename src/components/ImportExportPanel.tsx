@@ -15,6 +15,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
   const [textInput, setTextInput] = useState<string>('5/3, 7/3, 5/2, 5/3, 7/3, 5/2, x, 12/1+12/2+12/3');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [includeMidiRests, setIncludeMidiRests] = useState(false);
   const midiInputRef = useRef<HTMLInputElement>(null);
 
   const showSuccess = (msg: string) => {
@@ -148,6 +149,10 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
       // Process all beats sequentially
       project.measures.forEach((measure) => {
         measure.beats.forEach((beat) => {
+          // Empty grid cells are workspace padding unless the user explicitly
+          // chooses to preserve them as timed rests in the MIDI export.
+          if (beat.positions.length === 0 && !includeMidiRests) return;
+
           // Duration mapping
           let durationString = '8'; // default eighth
           switch (beat.duration) {
@@ -389,6 +394,19 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
                 </div>
                 <Download className="w-3.5 h-3.5 opacity-60 text-indigo-400" />
               </button>
+
+              <label className="flex items-start gap-2 px-1 text-[10px] text-zinc-400 leading-relaxed cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeMidiRests}
+                  onChange={(event) => setIncludeMidiRests(event.target.checked)}
+                  className="mt-0.5 accent-indigo-500"
+                />
+                <span>
+                  Include empty grid cells as MIDI rests
+                  <span className="block text-zinc-600">Off by default so unused cells do not add silence between written notes.</span>
+                </span>
+              </label>
 
               {/* MusicXML download Button */}
               <button
