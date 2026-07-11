@@ -50,6 +50,45 @@ export function pitchToGuitarNote(pitch: number, previousFret?: number): TabPosi
 
 const NOTE_NAMES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
 
+export function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+export function durationToQuarterBeats(duration: NoteDuration, dotted = false): number {
+  const beats = { w: 4, h: 2, q: 1, e: 0.5, s: 0.25 }[duration];
+  return dotted ? beats * 1.5 : beats;
+}
+
+export function groupBeatsIntoMeasures(beats: Beat[], capacity = 4): Measure[] {
+  const measures: Measure[] = [];
+  let current: Beat[] = [];
+  let used = 0;
+
+  beats.forEach((beat) => {
+    const value = durationToQuarterBeats(beat.duration, beat.dotted);
+    if (current.length > 0 && used + value > capacity) {
+      measures.push({ id: `m_${measures.length + 1}`, beats: current });
+      current = [];
+      used = 0;
+    }
+    current.push(beat);
+    used += value;
+    if (used >= capacity) {
+      measures.push({ id: `m_${measures.length + 1}`, beats: current });
+      current = [];
+      used = 0;
+    }
+  });
+
+  if (current.length > 0) measures.push({ id: `m_${measures.length + 1}`, beats: current });
+  return measures;
+}
+
 // Convert MIDI pitch to VexFlow key representation (e.g., 60 -> 'c/4')
 export function pitchToVexKey(pitch: number): { key: string; accidental: string | null } {
   const noteIndex = pitch % 12;
@@ -78,7 +117,7 @@ export function vexKeyToPitch(keyStr: string): number {
 // Generates a well-formatted MusicXML 4.0 string for the project
 export function generateMusicXML(project: SongProject): string {
   const bpm = project.bpm;
-  const title = project.title || 'Untitled';
+  const title = escapeXml(project.title || 'Untitled');
   const beatsPerMeasure = project.timeSignature.beats;
   const beatType = project.timeSignature.beatType;
 
@@ -187,6 +226,9 @@ export function generateMusicXML(project: SongProject): string {
           break;
       }
 
+      if (beat.dotted) durationTicks = Math.round(durationTicks * 1.5);
+      const dotElement = beat.dotted ? '\n        <dot/>' : '';
+
       if (beat.positions.length === 0) {
         // Rest note
         xml += `
@@ -194,7 +236,7 @@ export function generateMusicXML(project: SongProject): string {
         <rest/>
         <duration>${durationTicks}</duration>
         <voice>1</voice>
-        <type>${typeName}</type>
+        <type>${typeName}</type>${dotElement}
       </note>`;
       } else {
         // Playable notes (can be a chord)
@@ -216,7 +258,7 @@ export function generateMusicXML(project: SongProject): string {
         </pitch>
         <duration>${durationTicks}</duration>
         <voice>1</voice>
-        <type>${typeName}</type>
+        <type>${typeName}</type>${dotElement}
         <notations>
           <technical>
             <string>${pos.string}</string>
@@ -333,18 +375,7 @@ export function parseInputToProject(inputStr: string): Partial<SongProject> | nu
       };
     });
 
-    // Chunk beats into measures of 4 beats each
-    const measures: Measure[] = [];
-    const beatsPerMeasure = 4;
-    for (let i = 0; i < beats.length; i += beatsPerMeasure) {
-      const mBeats = beats.slice(i, i + beatsPerMeasure);
-      measures.push({
-        id: `m_${Math.floor(i / beatsPerMeasure) + 1}`,
-        beats: mBeats
-      });
-    }
-
-    return { measures };
+    return { measures: groupBeatsIntoMeasures(beats) };
   }
 
   // 3. Simple space-separated midi pitches (e.g. "60 62 64 65")
@@ -360,17 +391,7 @@ export function parseInputToProject(inputStr: string): Partial<SongProject> | nu
       };
     });
 
-    const measures: Measure[] = [];
-    const beatsPerMeasure = 4;
-    for (let i = 0; i < beats.length; i += beatsPerMeasure) {
-      const mBeats = beats.slice(i, i + beatsPerMeasure);
-      measures.push({
-        id: `m_${Math.floor(i / beatsPerMeasure) + 1}`,
-        beats: mBeats
-      });
-    }
-
-    return { measures };
+    return { measures: groupBeatsIntoMeasures(beats) };
   }
 
   return null;

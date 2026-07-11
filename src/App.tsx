@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { SongProject, TabPosition, InstrumentType } from './types';
 import { NotationCanvas } from './components/NotationCanvas';
 import { GridEditor } from './components/GridEditor';
 import { TapRecorder } from './components/TapRecorder';
-import { ImportExportPanel } from './components/ImportExportPanel';
 import { AudioPlaybackEngine } from './utils/audio';
-import { Play, Pause, RotateCcw, Volume2, Music, HelpCircle, FileText, CheckCircle, Activity } from 'lucide-react';
+import { useProjectHistory } from './hooks/useProjectHistory';
+import { Play, Pause, RotateCcw, HelpCircle, Activity, Undo2, Redo2, Repeat2, Save } from 'lucide-react';
+
+const ImportExportPanel = lazy(() => import('./components/ImportExportPanel').then((module) => ({ default: module.ImportExportPanel })));
 
 const DEFAULT_PROJECT: SongProject = {
   title: 'Smoke on the Water',
@@ -69,10 +71,12 @@ const DEFAULT_PROJECT: SongProject = {
 };
 
 export default function App() {
-  const [project, setProject] = useState<SongProject>(DEFAULT_PROJECT);
+  const { project, setProject, undo, redo, canUndo, canRedo } = useProjectHistory(DEFAULT_PROJECT);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMetronomeOn, setIsMetronomeOn] = useState(false);
   const [activeBeatIndex, setActiveBeatIndex] = useState<number | null>(null);
+  const [selectedBeatIndex, setSelectedBeatIndex] = useState(0);
+  const [isLooping, setIsLooping] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
   const audioEngineRef = useRef<AudioPlaybackEngine | null>(null);
@@ -95,6 +99,41 @@ export default function App() {
       audioEngineRef.current.updateProject(project);
     }
   }, [project]);
+
+  useEffect(() => {
+    const handleHistoryShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const target = event.target as HTMLElement;
+      if (target.matches('input, textarea, select')) return;
+      if (event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        event.shiftKey ? redo() : undo();
+      } else if (event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', handleHistoryShortcut);
+    return () => window.removeEventListener('keydown', handleHistoryShortcut);
+  }, [redo, undo]);
+
+  useEffect(() => {
+    const engine = audioEngineRef.current;
+    if (!engine) return;
+    if (!isLooping) {
+      engine.setLoopRange(null);
+      return;
+    }
+    let cursor = 0;
+    for (const measure of project.measures) {
+      const end = cursor + measure.beats.length - 1;
+      if (selectedBeatIndex >= cursor && selectedBeatIndex <= end) {
+        engine.setLoopRange({ start: cursor, end });
+        return;
+      }
+      cursor = end + 1;
+    }
+  }, [isLooping, project.measures, selectedBeatIndex]);
 
   // Handle metronome state and BPM changes
   useEffect(() => {
@@ -125,7 +164,7 @@ export default function App() {
       audioEngineRef.current.stop();
       setActiveBeatIndex(null);
     } else {
-      audioEngineRef.current.start(activeBeatIndex || 0);
+      audioEngineRef.current.start(selectedBeatIndex);
       if (isMetronomeOn) {
         audioEngineRef.current.stopMetronome();
         audioEngineRef.current.startMetronome(project.bpm);
@@ -137,7 +176,13 @@ export default function App() {
     if (!audioEngineRef.current) return;
     audioEngineRef.current.stop();
     setActiveBeatIndex(null);
+    setSelectedBeatIndex(0);
   };
+
+  useEffect(() => {
+    const totalBeats = project.measures.reduce((total, measure) => total + measure.beats.length, 0);
+    if (selectedBeatIndex >= totalBeats) setSelectedBeatIndex(Math.max(0, totalBeats - 1));
+  }, [project.measures, selectedBeatIndex]);
 
   const handleToggleMetronome = () => {
     setIsMetronomeOn((prev) => !prev);
@@ -162,7 +207,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans select-none pb-12">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans pb-28 md:pb-12">
       
       {/* 1. Header / Action Bar */}
       <header className="no-print h-14 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur sticky top-0 z-40 px-6 flex items-center justify-between">
@@ -181,12 +226,18 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
+          <span className="hidden lg:flex items-center gap-1 text-[10px] text-emerald-400 font-mono mr-2" title="Projects are saved automatically in this browser">
+            <Save className="w-3.5 h-3.5" /> Autosaved
+          </span>
+          <button onClick={undo} disabled={!canUndo} aria-label="Undo" title="Undo (Ctrl/Command+Z)" className="p-2 rounded bg-zinc-850 hover:bg-zinc-800 disabled:opacity-30 text-zinc-300 border border-zinc-800 cursor-pointer"><Undo2 className="w-4 h-4" /></button>
+          <button onClick={redo} disabled={!canRedo} aria-label="Redo" title="Redo (Ctrl/Command+Shift+Z)" className="p-2 rounded bg-zinc-850 hover:bg-zinc-800 disabled:opacity-30 text-zinc-300 border border-zinc-800 cursor-pointer"><Redo2 className="w-4 h-4" /></button>
           <button
             onClick={() => setShowHelp(!showHelp)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-zinc-850 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-semibold cursor-pointer transition-all"
+            aria-expanded={showHelp}
           >
             <HelpCircle className="w-4 h-4 text-indigo-400" />
-            Workspace Guide
+            <span className="hidden sm:inline">Workspace Guide</span>
           </button>
         </div>
       </header>
@@ -198,6 +249,7 @@ export default function App() {
             <button
               onClick={() => setShowHelp(false)}
               className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-300 font-bold text-xs bg-zinc-800 w-6 h-6 rounded-full flex items-center justify-center cursor-pointer border border-zinc-700"
+              aria-label="Close workspace guide"
             >
               ×
             </button>
@@ -296,6 +348,8 @@ export default function App() {
                   : 'bg-zinc-800 border-zinc-700 hover:bg-zinc-750 text-zinc-400 hover:text-zinc-200'
               }`}
               title="Toggle Metronome Click Track"
+              aria-label="Toggle metronome"
+              aria-pressed={isMetronomeOn}
             >
               <Activity className="w-4 h-4" />
             </button>
@@ -307,15 +361,26 @@ export default function App() {
                   ? 'bg-rose-500 text-white hover:bg-rose-450 shadow-rose-500/10' 
                   : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/10'
               }`}
-            >
+              aria-label={isPlaying ? 'Pause playback' : `Play from beat ${selectedBeatIndex + 1}`}
+              >
               {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
             </button>
 
             <button
               onClick={handleResetPlay}
               className="w-10 h-10 rounded bg-zinc-800 hover:bg-zinc-750 active:bg-zinc-900 border border-zinc-700 flex items-center justify-center text-zinc-300 transition-colors cursor-pointer"
+              aria-label="Return playback to the beginning"
             >
               <RotateCcw className="w-4 h-4 text-zinc-400 hover:text-zinc-200" />
+            </button>
+            <button
+              onClick={() => setIsLooping((value) => !value)}
+              className={`w-10 h-10 rounded border flex items-center justify-center transition-colors cursor-pointer ${isLooping ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`}
+              aria-label="Loop selected measure"
+              aria-pressed={isLooping}
+              title="Loop the measure containing the selected beat"
+            >
+              <Repeat2 className="w-4 h-4" />
             </button>
           </div>
 
@@ -347,6 +412,8 @@ export default function App() {
             project={project}
             setProject={setProject}
             activeBeatIndex={activeBeatIndex}
+            selectedBeatIndex={selectedBeatIndex}
+            onSelectBeat={setSelectedBeatIndex}
             onTriggerPlayChord={handleTriggerPlayChord}
           />
         </div>
@@ -358,13 +425,17 @@ export default function App() {
             setProject={setProject}
             onTriggerPlayChord={handleTriggerPlayChord}
           />
-          <ImportExportPanel
-            project={project}
-            setProject={setProject}
-          />
+          <Suspense fallback={<div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-sm text-zinc-400">Loading import and export tools…</div>}>
+            <ImportExportPanel project={project} setProject={setProject} />
+          </Suspense>
         </div>
 
       </main>
+      <div className="no-print fixed md:hidden bottom-0 inset-x-0 z-50 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur px-4 py-3 flex items-center justify-center gap-3">
+        <button onClick={handleResetPlay} aria-label="Return playback to beginning" className="w-11 h-11 rounded bg-zinc-800 border border-zinc-700 flex items-center justify-center"><RotateCcw className="w-4 h-4" /></button>
+        <button onClick={handleTogglePlay} aria-label={isPlaying ? 'Pause playback' : 'Start playback'} className={`w-14 h-12 rounded flex items-center justify-center text-white ${isPlaying ? 'bg-rose-500' : 'bg-indigo-600'}`}>{isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}</button>
+        <button onClick={() => setIsLooping((value) => !value)} aria-label="Loop selected measure" aria-pressed={isLooping} className={`w-11 h-11 rounded border flex items-center justify-center ${isLooping ? 'bg-indigo-600 border-indigo-500' : 'bg-zinc-800 border-zinc-700'}`}><Repeat2 className="w-4 h-4" /></button>
+      </div>
     </div>
   );
 }

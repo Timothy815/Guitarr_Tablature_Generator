@@ -16,6 +16,11 @@ export class AudioPlaybackEngine {
   private metronomeTimerId: number | null = null;
   private isMetronomePlaying = false;
   private metronomeBpm = 120;
+  private loopRange: { start: number; end: number } | null = null;
+
+  public setLoopRange(range: { start: number; end: number } | null) {
+    this.loopRange = range;
+  }
 
   public startMetronome(bpm: number) {
     this.initCtx();
@@ -203,7 +208,11 @@ export class AudioPlaybackEngine {
     }
 
     // Move to next beat
-    this.currentBeatIndex = (this.currentBeatIndex + 1) % this.flatBeats.length;
+    if (this.loopRange && this.currentBeatIndex >= this.loopRange.end) {
+      this.currentBeatIndex = this.loopRange.start;
+    } else {
+      this.currentBeatIndex = (this.currentBeatIndex + 1) % this.flatBeats.length;
+    }
 
     // Schedule next call
     this.timerId = window.setTimeout(() => {

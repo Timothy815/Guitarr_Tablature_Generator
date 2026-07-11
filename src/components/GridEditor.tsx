@@ -6,6 +6,8 @@ interface GridEditorProps {
   project: SongProject;
   setProject: React.Dispatch<React.SetStateAction<SongProject>>;
   activeBeatIndex: number | null;
+  selectedBeatIndex: number;
+  onSelectBeat: (index: number) => void;
   onTriggerPlayChord: (positions: TabPosition[]) => void;
 }
 
@@ -13,6 +15,8 @@ export const GridEditor: React.FC<GridEditorProps> = ({
   project,
   setProject,
   activeBeatIndex,
+  selectedBeatIndex,
+  onSelectBeat,
   onTriggerPlayChord,
 }) => {
   // Store focused cell coordinates: { stringIndex, absoluteBeatIndex }
@@ -403,6 +407,7 @@ export const GridEditor: React.FC<GridEditorProps> = ({
                 {/* String Fret Beats Columns */}
                 {flatBeats.map((beat) => {
                   const isPlaybackActive = beat.absoluteIdx === activeBeatIndex;
+                  const isBeatSelected = beat.absoluteIdx === selectedBeatIndex;
                   const isCellFocused = focusedCell?.stringNum === stringNum && focusedCell?.beatIdx === beat.absoluteIdx;
                   
                   // Find if there is a note for this string on this beat
@@ -418,11 +423,18 @@ export const GridEditor: React.FC<GridEditorProps> = ({
                   return (
                     <button
                       key={`${stringNum}_${beat.absoluteIdx}`}
-                      onClick={() => setFocusedCell({ stringNum, beatIdx: beat.absoluteIdx })}
+                      onClick={() => {
+                        setFocusedCell({ stringNum, beatIdx: beat.absoluteIdx });
+                        onSelectBeat(beat.absoluteIdx);
+                        if (beat.positions.length > 0) onTriggerPlayChord(beat.positions);
+                      }}
+                      aria-label={`String ${stringNum}, beat ${beat.absoluteIdx + 1}${displayVal !== '' ? `, fret ${displayVal}` : ', empty'}`}
+                      aria-pressed={isCellFocused}
                       className={`
                         w-10 h-10 flex-none flex items-center justify-center font-mono text-sm font-bold z-10 transition-all cursor-pointer relative
                         ${isMeasureStart ? 'border-l border-zinc-800' : ''}
                         ${isPlaybackActive ? 'bg-indigo-500/20' : ''}
+                        ${isBeatSelected && !isPlaybackActive ? 'bg-indigo-500/10' : ''}
                         ${isCellFocused ? 'ring-1 ring-indigo-500 bg-zinc-800/80' : 'hover:bg-zinc-800/30'}
                       `}
                     >
@@ -449,7 +461,8 @@ export const GridEditor: React.FC<GridEditorProps> = ({
             {flatBeats.map((beat) => (
               <div
                 key={`sub_${beat.absoluteIdx}`}
-                className={`w-10 flex-none text-center font-mono text-[9px] font-medium text-zinc-500 ${
+                onClick={() => onSelectBeat(beat.absoluteIdx)}
+                className={`w-10 flex-none text-center font-mono text-[9px] font-medium cursor-pointer ${beat.absoluteIdx === selectedBeatIndex ? 'text-indigo-400 font-bold' : 'text-zinc-500'} ${
                   beat.beatIdxInMeasure === 0 ? 'border-l border-zinc-850 font-bold text-zinc-400' : ''
                 }`}
               >

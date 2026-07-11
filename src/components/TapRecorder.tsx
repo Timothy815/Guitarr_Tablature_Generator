@@ -136,7 +136,7 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({ project, setProject, o
     };
   }, [isRecording, tapEvents, activeNoteIdx, sequenceNotes, project.bpm]);
 
-  const handleDown = (e?: React.MouseEvent | React.KeyboardEvent) => {
+  const handleDown = (e?: React.PointerEvent | React.KeyboardEvent) => {
     if (e && e.type !== 'keydown') {
       if (e.currentTarget instanceof HTMLElement) {
         e.currentTarget.blur();
@@ -161,7 +161,7 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({ project, setProject, o
     }
   };
 
-  const handleUp = (e?: React.MouseEvent | React.KeyboardEvent) => {
+  const handleUp = (e?: React.PointerEvent | React.KeyboardEvent) => {
     const state = stateRef.current;
     if (!state.isRecording) return;
     
@@ -379,11 +379,11 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({ project, setProject, o
               </button>
             ) : isRecording ? (
               <button
-                onMouseDown={handleDown}
-                onMouseUp={handleUp}
-                onMouseLeave={handleUp}
-                onTouchStart={handleDown}
-                onTouchEnd={handleUp}
+                onPointerDown={handleDown}
+                onPointerUp={handleUp}
+                onPointerLeave={handleUp}
+                onPointerCancel={handleUp}
+                aria-label={`Tap and hold note ${activeNoteIdx + 1} of ${sequenceNotes.length}`}
                 className="w-full h-32 rounded bg-indigo-900/20 hover:bg-indigo-900/30 border-2 border-indigo-500/30 hover:border-indigo-500 active:bg-indigo-500/30 transition-all flex flex-col items-center justify-center text-center gap-2 cursor-pointer relative overflow-hidden select-none"
               >
                 <div className="absolute inset-0 bg-indigo-500/5 animate-pulse" />

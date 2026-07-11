@@ -2,9 +2,6 @@ import React, { useState, useRef } from 'react';
 import { SongProject, Beat, Measure, TabPosition, NoteDuration } from '../types';
 import { parseInputToProject, generateMusicXML, pitchToGuitarNote } from '../utils/notation';
 import { FileUp, FileDown, FileText, Code, CheckCircle, Download, Printer } from 'lucide-react';
-import { Midi } from '@tonejs/midi';
-import MidiWriter from 'midi-writer-js';
-import { jsPDF } from 'jspdf';
 
 interface ImportExportPanelProps {
   project: SongProject;
@@ -50,6 +47,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
     if (!file) return;
 
     try {
+      const { Midi } = await import('@tonejs/midi');
       const arrayBuffer = await file.arrayBuffer();
       const midi = new Midi(arrayBuffer);
 
@@ -138,8 +136,9 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
   };
 
   // Export as MIDI File download
-  const handleExportMIDI = () => {
+  const handleExportMIDI = async () => {
     try {
+      const { default: MidiWriter } = await import('midi-writer-js');
       const track = new MidiWriter.Track();
       track.setTempo(project.bpm);
       
@@ -244,6 +243,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
       
       // Calculate a custom PDF size to perfectly fit the continuous horizontal notation
       const padding = 40;
+      const { jsPDF } = await import('jspdf');
       const pdf = new jsPDF({
         orientation: logicalWidth > logicalHeight ? 'landscape' : 'portrait',
         unit: 'pt',
@@ -255,7 +255,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
       pdf.text(project.title, padding, padding);
       
       pdf.setFontSize(12);
-      pdf.text(`Tempo: ${project.tempo} BPM | Instrument: ${project.instrument}`, padding, padding + 20);
+      pdf.text(`Tempo: ${project.bpm} BPM | Instrument: ${project.instrument}`, padding, padding + 20);
 
       // Render the Canvas
       const dataUrl = canvasElement.toDataURL('image/png');
@@ -281,14 +281,14 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
       </div>
 
       {successMsg && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded p-3 flex items-center gap-2.5 text-xs font-medium animate-in fade-in duration-200">
+        <div role="status" className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded p-3 flex items-center gap-2.5 text-xs font-medium animate-in fade-in duration-200">
           <CheckCircle className="w-4 h-4 text-emerald-400 flex-none" />
           <span>{successMsg}</span>
         </div>
       )}
 
       {errorMsg && (
-        <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded p-3 flex items-center gap-2.5 text-xs font-medium animate-in fade-in duration-200">
+        <div role="alert" className="bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded p-3 flex items-center gap-2.5 text-xs font-medium animate-in fade-in duration-200">
           <div className="flex-none">⚠️</div>
           <span>{errorMsg}</span>
         </div>
