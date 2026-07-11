@@ -424,6 +424,8 @@ export default function App() {
             project={project}
             setProject={setProject}
             onTriggerPlayChord={handleTriggerPlayChord}
+            isMetronomeOn={isMetronomeOn}
+            onToggleMetronome={handleToggleMetronome}
           />
           <Suspense fallback={<div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-sm text-zinc-400">Loading import and export tools…</div>}>
             <ImportExportPanel project={project} setProject={setProject} />

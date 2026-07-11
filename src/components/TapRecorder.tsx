@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SongProject, Beat, NoteDuration, TabPosition } from '../types';
-import { Play, Square, Activity, HelpCircle, Check, Music } from 'lucide-react';
+import { Play, Square, Activity, HelpCircle, Check, Music, AudioLines } from 'lucide-react';
 
 interface TapRecorderProps {
   project: SongProject;
   setProject: React.Dispatch<React.SetStateAction<SongProject>>;
   onTriggerPlayChord: (positions: TabPosition[]) => void;
+  isMetronomeOn: boolean;
+  onToggleMetronome: () => void;
 }
 
 interface TapEvent {
@@ -18,7 +20,13 @@ interface ApproximatedRhythm {
   duration: NoteDuration;
 }
 
-export const TapRecorder: React.FC<TapRecorderProps> = ({ project, setProject, onTriggerPlayChord }) => {
+export const TapRecorder: React.FC<TapRecorderProps> = ({
+  project,
+  setProject,
+  onTriggerPlayChord,
+  isMetronomeOn,
+  onToggleMetronome,
+}) => {
   const [isRecording, setIsRecording] = useState(false);
   const [tapEvents, setTapEvents] = useState<TapEvent[]>([]);
   const [sequenceNotes, setSequenceNotes] = useState<{ id: string; name: string; notesStr: string; positions: TabPosition[]; duration: NoteDuration }[]>([]);
@@ -297,7 +305,7 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({ project, setProject, o
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-xl flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold text-zinc-100 tracking-tight flex items-center gap-2">
             <Activity className="w-5 h-5 text-indigo-400" />
@@ -308,12 +316,31 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({ project, setProject, o
           </p>
         </div>
 
-        <button
-          onClick={() => setShowHelper(!showHelper)}
-          className="p-1.5 rounded bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 cursor-pointer"
-        >
-          <HelpCircle className="w-4 h-4 text-indigo-400" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onToggleMetronome}
+            className={`flex items-center gap-2 px-3 py-2 rounded border text-xs font-semibold transition-colors cursor-pointer ${
+              isMetronomeOn
+                ? 'bg-indigo-600 border-indigo-500 text-white'
+                : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+            }`}
+            aria-label={`${isMetronomeOn ? 'Turn off' : 'Turn on'} metronome at ${project.bpm} BPM`}
+            aria-pressed={isMetronomeOn}
+            title="Use the metronome while tapping your rhythm"
+          >
+            <AudioLines className="w-4 h-4" />
+            <span>{isMetronomeOn ? 'Metronome On' : 'Metronome Off'}</span>
+            <span className={isMetronomeOn ? 'text-indigo-100' : 'text-zinc-500'}>{project.bpm} BPM</span>
+          </button>
+          <button
+            onClick={() => setShowHelper(!showHelper)}
+            className="p-2 rounded bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700 cursor-pointer"
+            aria-label="Show rhythm tapping instructions"
+            aria-expanded={showHelper}
+          >
+            <HelpCircle className="w-4 h-4 text-indigo-400" />
+          </button>
+        </div>
       </div>
 
       {showHelper && (
@@ -321,6 +348,7 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({ project, setProject, o
           <h4 className="font-semibold text-zinc-100 mb-1.5">How Tapping Record Works:</h4>
           <ol className="list-decimal pl-4 flex flex-col gap-1">
             <li>Type some frets into the tablature grid.</li>
+            <li>Turn on the nearby metronome and listen for the pulse.</li>
             <li>Click <strong>Start Record</strong> below.</li>
             <li>Press and hold the <strong>TAP PAD</strong> or <strong>Spacebar</strong> to play each note.</li>
             <li>Holding down creates a note, releasing creates a rest.</li>
