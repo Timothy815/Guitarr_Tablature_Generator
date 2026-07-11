@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom printing styles for hiding app dashboard controls during PDF export */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  /* Ensure vexflow SVG is scaled and centered on standard pages */
+  svg {
+    max-width: 100% !important;
+    height: auto !important;
+    page-break-inside: avoid;
+  }
+}
+
+
+/* Explicit class-based print mode for html2canvas */
+body.print-mode {
+  background: white !important;
+  color: black !important;
+}
+body.print-mode .no-print {
+  display: none !important;
+}
+body.print-mode .print-only {
+  display: block !important;
+}
+body.print-mode svg {
+  max-width: 100% !important;
+  height: auto !important;
+  page-break-inside: avoid;
+}
+
+body.print-mode canvas {
+  max-width: 100% !important;
+  height: auto !important;
+  page-break-inside: avoid;
+}

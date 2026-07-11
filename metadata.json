@@ -1,0 +1,6 @@
+{
+  "name": "Guitar Tablature & Notation Studio",
+  "description": "An interactive guitar tablature and standard music notation editor featuring MIDI import, MIDI/MusicXML export, custom audio playback, and a rhythm tapping composer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
