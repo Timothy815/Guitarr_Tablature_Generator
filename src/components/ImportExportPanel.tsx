@@ -289,12 +289,18 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
 
       for (let startMeasure = 0; startMeasure < project.measures.length; startMeasure += measuresPerSystem) {
         const count = Math.min(measuresPerSystem, project.measures.length - startMeasure);
+        const isFinalSystem = startMeasure + count >= project.measures.length;
         const logicalStartX = startMeasure === 0
           ? 0
-          : canvasPadding + firstMeasureWidth + (startMeasure - 1) * regularMeasureWidth;
-        const logicalCropWidth = startMeasure === 0
-          ? canvasPadding + firstMeasureWidth + (count - 1) * regularMeasureWidth
+          : firstMeasureWidth + (startMeasure - 1) * regularMeasureWidth;
+        const measureContentWidth = startMeasure === 0
+          ? firstMeasureWidth + (count - 1) * regularMeasureWidth
           : count * regularMeasureWidth;
+        // Use the same inset on every wrapped line. Keep the final right inset
+        // as well so VexFlow's closing double bar is not clipped by the crop.
+        const logicalCropWidth = canvasPadding
+          + measureContentWidth
+          + (isFinalSystem ? canvasPadding : 0);
         const sourceX = Math.round(logicalStartX * scaleX);
         const sourceWidth = Math.min(
           canvasElement.width - sourceX,
@@ -320,7 +326,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
           canvasElement.height,
         );
 
-        const fullSystemWidth = measuresPerSystem * regularMeasureWidth;
+        const fullSystemWidth = canvasPadding + measuresPerSystem * regularMeasureWidth;
         const renderedWidth = contentWidth * Math.min(1, logicalCropWidth / fullSystemWidth);
         const renderedHeight = renderedWidth * (systemCanvas.height / systemCanvas.width);
         if (y + renderedHeight > pageHeight - pageMargin) {
