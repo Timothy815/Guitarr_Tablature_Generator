@@ -241,30 +241,98 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
         return;
       }
 
-      // Use logical width/height to keep PDF dimensions reasonable while retaining high-DPI canvas quality
-      const pixelRatio = window.devicePixelRatio || 1;
-      const logicalWidth = canvasElement.width / pixelRatio;
-      const logicalHeight = canvasElement.height / pixelRatio;
-      
-      // Calculate a custom PDF size to perfectly fit the continuous horizontal notation
-      const padding = 40;
+      // Lay the continuous editor canvas out as measure-aligned systems on
+      // standard US Letter pages. The notation canvas uses one 260px opening
+      // measure, 200px following measures, and 20px outer padding.
+      const pageMargin = 40;
+      const headerHeight = 62;
+      const systemGap = 18;
+      const measuresPerSystem = 3;
+      const firstMeasureWidth = 260;
+      const regularMeasureWidth = 200;
+      const canvasPadding = 20;
+      const logicalCanvasWidth = firstMeasureWidth
+        + Math.max(0, project.measures.length - 1) * regularMeasureWidth
+        + canvasPadding * 2;
+      const scaleX = canvasElement.width / logicalCanvasWidth;
+
       const { jsPDF } = await import('jspdf');
       const pdf = new jsPDF({
-        orientation: logicalWidth > logicalHeight ? 'landscape' : 'portrait',
+        orientation: 'portrait',
         unit: 'pt',
-        format: [logicalWidth + padding * 2, Math.max(logicalHeight + padding * 2, 400)]
+        format: 'letter',
       });
-      
-      // Add a title to the PDF
-      pdf.setFontSize(24);
-      pdf.text(project.title, padding, padding);
-      
-      pdf.setFontSize(12);
-      pdf.text(`Tempo: ${project.bpm} BPM | Instrument: ${project.instrument}`, padding, padding + 20);
 
-      // Render the Canvas
-      const dataUrl = canvasElement.toDataURL('image/png');
-      pdf.addImage(dataUrl, 'PNG', padding, padding + 40, logicalWidth, logicalHeight);
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const contentWidth = pageWidth - pageMargin * 2;
+      let pageNumber = 1;
+      let y = pageMargin;
+
+      const drawPageHeader = () => {
+        pdf.setFontSize(pageNumber === 1 ? 22 : 13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(project.title || 'Untitled', pageMargin, y);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        pdf.setTextColor(90);
+        pdf.text(
+          `Tempo: ${project.bpm} BPM  •  Instrument: ${project.instrument}`,
+          pageMargin,
+          y + 17,
+        );
+        pdf.setTextColor(0);
+        y += headerHeight;
+      };
+
+      drawPageHeader();
+
+      for (let startMeasure = 0; startMeasure < project.measures.length; startMeasure += measuresPerSystem) {
+        const count = Math.min(measuresPerSystem, project.measures.length - startMeasure);
+        const logicalStartX = startMeasure === 0
+          ? 0
+          : canvasPadding + firstMeasureWidth + (startMeasure - 1) * regularMeasureWidth;
+        const logicalCropWidth = startMeasure === 0
+          ? canvasPadding + firstMeasureWidth + (count - 1) * regularMeasureWidth
+          : count * regularMeasureWidth;
+        const sourceX = Math.round(logicalStartX * scaleX);
+        const sourceWidth = Math.min(
+          canvasElement.width - sourceX,
+          Math.round(logicalCropWidth * scaleX),
+        );
+
+        const systemCanvas = document.createElement('canvas');
+        systemCanvas.width = sourceWidth;
+        systemCanvas.height = canvasElement.height;
+        const systemContext = systemCanvas.getContext('2d');
+        if (!systemContext) throw new Error('Could not prepare a printable notation system.');
+        systemContext.fillStyle = '#ffffff';
+        systemContext.fillRect(0, 0, systemCanvas.width, systemCanvas.height);
+        systemContext.drawImage(
+          canvasElement,
+          sourceX,
+          0,
+          sourceWidth,
+          canvasElement.height,
+          0,
+          0,
+          sourceWidth,
+          canvasElement.height,
+        );
+
+        const fullSystemWidth = measuresPerSystem * regularMeasureWidth;
+        const renderedWidth = contentWidth * Math.min(1, logicalCropWidth / fullSystemWidth);
+        const renderedHeight = renderedWidth * (systemCanvas.height / systemCanvas.width);
+        if (y + renderedHeight > pageHeight - pageMargin) {
+          pdf.addPage();
+          pageNumber += 1;
+          y = pageMargin;
+          drawPageHeader();
+        }
+
+        pdf.addImage(systemCanvas.toDataURL('image/png'), 'PNG', pageMargin, y, renderedWidth, renderedHeight);
+        y += renderedHeight + systemGap;
+      }
       
       pdf.save(`${project.title.toLowerCase().replace(/\s+/g, '_')}.pdf`);
       showSuccess('PDF exported successfully!');
