@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Renderer, Stave, TabStave, StaveNote, TabNote, Formatter, Voice, Accidental, StaveConnector, GhostNote, Dot } from 'vexflow';
+import { Renderer, Stave, TabStave, StaveNote, TabNote, Formatter, Voice, Accidental, StaveConnector, GhostNote, Dot, Barline } from 'vexflow';
 import { SongProject } from '../types';
 import { guitarNoteToPitch, pitchToVexKey } from '../utils/notation';
 
@@ -75,6 +75,7 @@ export const NotationCanvas: React.FC<NotationCanvasProps> = ({
 
       // 1. Create standard stave
       const stave = new Stave(currentX, 20, measureWidth);
+      if (mIdx === measures.length - 1) stave.setEndBarType(Barline.type.END);
       if (isFirst) {
         stave.addClef('treble').addTimeSignature(`${project.timeSignature.beats}/${project.timeSignature.beatType}`);
       }
@@ -82,6 +83,7 @@ export const NotationCanvas: React.FC<NotationCanvasProps> = ({
 
       // 2. Create tab stave
       const tabStave = new TabStave(currentX, 120, measureWidth);
+      if (mIdx === measures.length - 1) tabStave.setEndBarType(Barline.type.END);
       if (isFirst) {
         tabStave.addClef('tab');
       }
@@ -101,13 +103,6 @@ export const NotationCanvas: React.FC<NotationCanvasProps> = ({
         const connectorLine = new StaveConnector(stave, tabStave);
         connectorLine.setType('single');
         connectorLine.setContext(context).draw();
-      }
-
-      // Draw end barline on the last measure
-      if (mIdx === measures.length - 1) {
-        const endConnector = new StaveConnector(stave, tabStave);
-        endConnector.setType('double');
-        endConnector.setContext(context).draw();
       }
 
       // 4. Create notes

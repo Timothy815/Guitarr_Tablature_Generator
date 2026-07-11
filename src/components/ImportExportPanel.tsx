@@ -251,6 +251,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
       const firstMeasureWidth = 260;
       const regularMeasureWidth = 200;
       const canvasPadding = 20;
+      const repeatedClefWidth = 85;
       const logicalCanvasWidth = firstMeasureWidth
         + Math.max(0, project.measures.length - 1) * regularMeasureWidth
         + canvasPadding * 2;
@@ -292,42 +293,44 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
         const isFinalSystem = startMeasure + count >= project.measures.length;
         const logicalStartX = startMeasure === 0
           ? 0
-          : firstMeasureWidth + (startMeasure - 1) * regularMeasureWidth;
-        const measureContentWidth = startMeasure === 0
-          ? firstMeasureWidth + (count - 1) * regularMeasureWidth
-          : count * regularMeasureWidth;
-        // Use the same inset on every wrapped line. Keep the final right inset
-        // as well so VexFlow's closing double bar is not clipped by the crop.
-        const logicalCropWidth = canvasPadding
-          + measureContentWidth
-          + (isFinalSystem ? canvasPadding : 0);
+          : canvasPadding + firstMeasureWidth + (startMeasure - 1) * regularMeasureWidth;
+        const logicalCropWidth = startMeasure === 0
+          ? canvasPadding + firstMeasureWidth + (count - 1) * regularMeasureWidth + (isFinalSystem ? canvasPadding : 0)
+          : count * regularMeasureWidth + (isFinalSystem ? canvasPadding : 0);
         const sourceX = Math.round(logicalStartX * scaleX);
         const sourceWidth = Math.min(
           canvasElement.width - sourceX,
           Math.round(logicalCropWidth * scaleX),
         );
 
+        const prefixWidth = startMeasure === 0 ? 0 : Math.round(repeatedClefWidth * scaleX);
         const systemCanvas = document.createElement('canvas');
-        systemCanvas.width = sourceWidth;
+        systemCanvas.width = prefixWidth + sourceWidth;
         systemCanvas.height = canvasElement.height;
         const systemContext = systemCanvas.getContext('2d');
         if (!systemContext) throw new Error('Could not prepare a printable notation system.');
         systemContext.fillStyle = '#ffffff';
         systemContext.fillRect(0, 0, systemCanvas.width, systemCanvas.height);
-        systemContext.drawImage(
-          canvasElement,
-          sourceX,
-          0,
-          sourceWidth,
-          canvasElement.height,
-          0,
-          0,
-          sourceWidth,
-          canvasElement.height,
-        );
+        if (prefixWidth > 0) {
+          // Repeat the opening bracket, clefs, time signature, and TAB label
+          // at the start of every wrapped system, as conventional notation does.
+          systemContext.drawImage(
+            canvasElement,
+            0,
+            0,
+            prefixWidth,
+            canvasElement.height,
+            0,
+            0,
+            prefixWidth,
+            canvasElement.height,
+          );
+        }
+        systemContext.drawImage(canvasElement, sourceX, 0, sourceWidth, canvasElement.height, prefixWidth, 0, sourceWidth, canvasElement.height);
 
         const fullSystemWidth = canvasPadding + measuresPerSystem * regularMeasureWidth;
-        const renderedWidth = contentWidth * Math.min(1, logicalCropWidth / fullSystemWidth);
+        const logicalSystemWidth = logicalCropWidth + (startMeasure === 0 ? 0 : repeatedClefWidth);
+        const renderedWidth = contentWidth * Math.min(1, logicalSystemWidth / fullSystemWidth);
         const renderedHeight = renderedWidth * (systemCanvas.height / systemCanvas.width);
         if (y + renderedHeight > pageHeight - pageMargin) {
           pdf.addPage();
