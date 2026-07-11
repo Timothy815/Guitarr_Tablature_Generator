@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SongProject, Beat, NoteDuration, TabPosition } from '../types';
 import { Play, Square, Activity, HelpCircle, Check, Music, AudioLines } from 'lucide-react';
+import { quantizeTapOnsets } from '../utils/rhythm';
 
 interface TapRecorderProps {
   project: SongProject;
@@ -16,8 +17,10 @@ interface TapEvent {
 }
 
 interface ApproximatedRhythm {
-  type: 'note' | 'rest';
+  type: 'note';
   duration: NoteDuration;
+  dotted?: boolean;
+  measuredBeats?: number;
 }
 
 export const TapRecorder: React.FC<TapRecorderProps> = ({
@@ -80,49 +83,10 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({
     setApproximatedDurations([]);
   };
 
-  const snapTime = (ms: number, quarterMs: number): NoteDuration | null => {
-    const beats = ms / quarterMs;
-    if (beats < 0.125) return null; // Too short to be a musical note/rest
-    if (beats >= 3.0) return 'w';
-    if (beats >= 1.5) return 'h';
-    if (beats >= 0.75) return 'q';
-    if (beats >= 0.375) return 'e';
-    return 's';
-  };
-
   const stopRecordingAndProcess = (events?: TapEvent[]) => {
     setIsRecording(false);
-    
-    // Process tap intervals
-    const bpm = project.bpm;
-    const quarterMs = 60000 / bpm;
-    const newDurations: ApproximatedRhythm[] = [];
-    
-    let lastDown = 0;
-    let lastUp = 0;
-
     const eventsToProcess = events || tapEvents;
-
-    for (let i = 0; i < eventsToProcess.length; i++) {
-       const event = eventsToProcess[i];
-       if (event.type === 'down') {
-          if (lastUp > 0) {
-             const restTime = event.time - lastUp;
-             const restDur = snapTime(restTime, quarterMs);
-             if (restDur) newDurations.push({ type: 'rest', duration: restDur });
-          }
-          lastDown = event.time;
-       } else if (event.type === 'up') {
-          if (lastDown > 0) {
-             const noteTime = event.time - lastDown;
-             const noteDur = snapTime(noteTime, quarterMs);
-             if (noteDur) newDurations.push({ type: 'note', duration: noteDur });
-          }
-          lastUp = event.time;
-       }
-    }
-
-    setApproximatedDurations(newDurations);
+    setApproximatedDurations(quantizeTapOnsets(eventsToProcess, project.bpm));
     setRecordingCompleted(true);
   };
 
@@ -218,13 +182,9 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({
     };
   }, []);
 
-  const getBeatValue = (d: NoteDuration) => {
-    if (d === 'w') return 4;
-    if (d === 'h') return 2;
-    if (d === 'q') return 1;
-    if (d === 'e') return 0.5;
-    if (d === 's') return 0.25;
-    return 1;
+  const getBeatValue = (d: NoteDuration, dotted = false) => {
+    const value = d === 'w' ? 4 : d === 'h' ? 2 : d === 'q' ? 1 : d === 'e' ? 0.5 : 0.25;
+    return dotted ? value * 1.5 : value;
   };
 
   // Apply the tapped durations to the project
@@ -239,17 +199,12 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({
       const originalNotes = sequenceNotes;
 
       approximatedDurations.forEach((item) => {
-         if (item.type === 'note' && noteIdx < originalNotes.length) {
+         if (noteIdx < originalNotes.length) {
             newBeats.push({
                id: `tapped_beat_${beatIdCounter++}`,
                duration: item.duration,
+               dotted: item.dotted,
                positions: originalNotes[noteIdx++].positions
-            });
-         } else if (item.type === 'rest') {
-            newBeats.push({
-               id: `tapped_beat_${beatIdCounter++}`,
-               duration: item.duration,
-               positions: []
             });
          }
       });
@@ -270,7 +225,7 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({
       let currentMeasureTime = 0;
       
       newBeats.forEach(beat => {
-         const val = getBeatValue(beat.duration);
+         const val = getBeatValue(beat.duration, beat.dotted);
          if (currentMeasureTime + val > prev.timeSignature.beats && currentMeasureBeats.length > 0) {
             measures.push({ id: `m_${measures.length + 1}`, beats: currentMeasureBeats });
             currentMeasureBeats = [beat];
@@ -350,8 +305,8 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({
             <li>Type some frets into the tablature grid.</li>
             <li>Turn on the nearby metronome and listen for the pulse.</li>
             <li>Click <strong>Start Record</strong> below.</li>
-            <li>Press and hold the <strong>TAP PAD</strong> or <strong>Spacebar</strong> to play each note.</li>
-            <li>Holding down creates a note, releasing creates a rest.</li>
+            <li>Tap the <strong>TAP PAD</strong> or <strong>Spacebar</strong> once for each note.</li>
+            <li>The spacing from one tap to the next determines the written rhythm.</li>
             <li>Click <strong>Apply Rhythm</strong> to write the newly approximated values directly into standard notation on the staff!</li>
           </ol>
         </div>
@@ -402,7 +357,7 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({
                 <Play className="w-8 h-8 text-indigo-400 group-hover:scale-110 transition-transform" />
                 <div className="flex flex-col">
                   <span className="text-sm font-semibold text-zinc-200">Start Tapping Record</span>
-                  <span className="text-[10px] text-zinc-500 mt-0.5">Hold notes and rests directly</span>
+                  <span className="text-[10px] text-zinc-500 mt-0.5">Tap each note in the rhythm you hear</span>
                 </div>
               </button>
             ) : isRecording ? (
@@ -411,12 +366,12 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({
                 onPointerUp={handleUp}
                 onPointerLeave={handleUp}
                 onPointerCancel={handleUp}
-                aria-label={`Tap and hold note ${activeNoteIdx + 1} of ${sequenceNotes.length}`}
+                aria-label={`Tap note ${activeNoteIdx + 1} of ${sequenceNotes.length}`}
                 className="w-full h-32 rounded bg-indigo-900/20 hover:bg-indigo-900/30 border-2 border-indigo-500/30 hover:border-indigo-500 active:bg-indigo-500/30 transition-all flex flex-col items-center justify-center text-center gap-2 cursor-pointer relative overflow-hidden select-none"
               >
                 <div className="absolute inset-0 bg-indigo-500/5 animate-pulse" />
                 <span className="text-2xl font-black text-indigo-400 tracking-wider uppercase font-mono animate-pulse">
-                  TAP AND HOLD
+                  TAP EACH NOTE
                 </span>
                 <span className="text-[10px] text-indigo-300 opacity-85 font-medium">
                   Or use <strong className="bg-zinc-800 px-1 py-0.5 rounded border border-zinc-700">Spacebar</strong>
@@ -435,9 +390,11 @@ export const TapRecorder: React.FC<TapRecorderProps> = ({
                   <div className="flex flex-col gap-1 max-h-[85px] overflow-y-auto pr-1">
                     {approximatedDurations.map((dur, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs font-mono text-zinc-300">
-                        <span className="text-zinc-500 text-[10px]">{dur.type === 'note' ? 'Note' : 'Rest'}:</span>
+                        <span className="text-zinc-500 text-[10px]">Note:</span>
                         <span className="font-bold text-indigo-400 uppercase">{dur.duration}</span>
-                        <span className="text-[10px] text-zinc-500">({durationFullLabels[dur.duration]})</span>
+                        <span className="text-[10px] text-zinc-500">
+                          ({dur.dotted ? 'Dotted ' : ''}{durationFullLabels[dur.duration].replace(/ \(.+\)$/, '')}, captured at {dur.measuredBeats?.toFixed(2)} beats)
+                        </span>
                       </div>
                     ))}
                   </div>
