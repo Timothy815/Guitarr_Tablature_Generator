@@ -89,6 +89,24 @@ export function groupBeatsIntoMeasures(beats: Beat[], capacity = 4): Measure[] {
   return measures;
 }
 
+export function projectToTextMarkup(project: SongProject): string {
+  return project.measures
+    .map((measure) => measure.beats.map((beat) => {
+      const duration = `:${beat.duration}${beat.dotted ? '.' : ''}`;
+      if (beat.positions.length === 0) return `x${duration}`;
+
+      const notes = [...beat.positions]
+        .sort((a, b) => a.string - b.string)
+        .map((position) => {
+          const fret = position.mute ? 'm' : String(position.fret);
+          return `${fret}/${position.string}${position.ghost ? 'x' : ''}`;
+        })
+        .join('+');
+      return `${notes}${duration}`;
+    }).join(', '))
+    .join(' | ');
+}
+
 // Convert MIDI pitch to VexFlow key representation (e.g., 60 -> 'c/4')
 export function pitchToVexKey(pitch: number): { key: string; accidental: string | null } {
   const noteIndex = pitch % 12;
@@ -305,8 +323,10 @@ export function parseInputToProject(inputStr: string): Partial<SongProject> | nu
 
   // 2. Fret/String comma list (e.g. "5/3, 7/3, 5/2, x, 7/2:q.", "5/3:e")
   // Format is: fret/string[:duration][.][x], where 'x' represents a rest, or multiple notes stacked like '5/3+5/2'
-  if (cleanInput.includes('/') || cleanInput.includes(',')) {
-    const tokens = cleanInput.split(',').map(t => t.trim());
+  if (cleanInput.includes('/') || cleanInput.includes(',') || cleanInput.includes('|') || /^x(?::|$)/i.test(cleanInput)) {
+    const measureGroups = cleanInput.split('|').map((group) => group.trim()).filter(Boolean);
+    const tokenGroups = measureGroups.map((group) => group.split(',').map((token) => token.trim()));
+    const tokens = tokenGroups.flat();
     const beats: Beat[] = tokens.map((token, idx) => {
       // Parse main token and modifiers
       let tokenBase = token.toLowerCase();
@@ -374,6 +394,16 @@ export function parseInputToProject(inputStr: string): Partial<SongProject> | nu
         dotted: dotted ? true : undefined
       };
     });
+
+    if (cleanInput.includes('|')) {
+      let cursor = 0;
+      const measures = tokenGroups.map((group, index) => {
+        const measureBeats = beats.slice(cursor, cursor + group.length);
+        cursor += group.length;
+        return { id: `m_${index + 1}`, beats: measureBeats };
+      });
+      return { measures };
+    }
 
     return { measures: groupBeatsIntoMeasures(beats) };
   }

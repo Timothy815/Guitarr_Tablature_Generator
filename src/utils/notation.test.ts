@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { durationToQuarterBeats, escapeXml, generateMusicXML, parseInputToProject } from './notation';
+import { durationToQuarterBeats, escapeXml, generateMusicXML, parseInputToProject, projectToTextMarkup } from './notation';
 import type { SongProject } from '../types';
 
 describe('notation timing', () => {
@@ -31,5 +31,36 @@ describe('MusicXML export', () => {
     expect(xml).toContain('<duration>24</duration>');
     expect(xml).toContain('<dot/>');
     expect(escapeXml('"A&B"')).toBe('&quot;A&amp;B&quot;');
+  });
+});
+
+describe('plain-text markup', () => {
+  it('round-trips grid notes, rests, modifiers, dots, and measure boundaries', () => {
+    const project: SongProject = {
+      title: 'Text Demo',
+      bpm: 90,
+      instrument: 'acoustic',
+      timeSignature: { beats: 4, beatType: 4 },
+      measures: [
+        { id: 'm1', beats: [
+          { id: 'b1', duration: 'q', dotted: true, positions: [{ string: 2, fret: 5, ghost: true }, { string: 3, fret: 7 }] },
+          { id: 'b2', duration: 'e', positions: [] },
+        ] },
+        { id: 'm2', beats: [
+          { id: 'b3', duration: 'h', positions: [{ string: 6, fret: 0, mute: true }] },
+        ] },
+      ],
+    };
+
+    const markup = projectToTextMarkup(project);
+    expect(markup).toBe('5/2x+7/3:q., x:e | m/6:h');
+    const parsed = parseInputToProject(markup);
+    expect(parsed?.measures).toHaveLength(2);
+    expect(parsed?.measures?.[0].beats[0]).toMatchObject({
+      duration: 'q',
+      dotted: true,
+      positions: [{ string: 2, fret: 5, ghost: true }, { string: 3, fret: 7, ghost: false }],
+    });
+    expect(parsed?.measures?.[1].beats[0].positions[0]).toMatchObject({ string: 6, mute: true });
   });
 });

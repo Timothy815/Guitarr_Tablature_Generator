@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { SongProject, Beat, Measure, TabPosition, NoteDuration } from '../types';
-import { parseInputToProject, generateMusicXML, pitchToGuitarNote } from '../utils/notation';
+import { parseInputToProject, generateMusicXML, pitchToGuitarNote, projectToTextMarkup } from '../utils/notation';
 import { FileUp, FileDown, FileText, Code, CheckCircle, Download, Printer } from 'lucide-react';
 
 interface ImportExportPanelProps {
@@ -17,6 +17,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [includeMidiRests, setIncludeMidiRests] = useState(false);
   const midiInputRef = useRef<HTMLInputElement>(null);
+  const textFileInputRef = useRef<HTMLInputElement>(null);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -40,6 +41,33 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
     } else {
       alert('Could not parse the input. Please check the examples and try again.');
     }
+  };
+
+  const handleTextFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const contents = await file.text();
+      setTextInput(contents.trim());
+      showSuccess(`Loaded text markup from "${file.name}". Review it, then choose Load Note Sequence.`);
+    } catch {
+      showError('Could not read that text file.');
+    }
+    event.target.value = '';
+  };
+
+  const handleExportText = () => {
+    const markup = projectToTextMarkup(project);
+    const blob = new Blob([`${markup}\n`], { type: 'text/plain;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${project.title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'tablature'}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    document.body.removeChild(link);
+    setTextInput(markup);
+    showSuccess('Current grid exported as plain-text tablature markup.');
   };
 
   // Import MIDI File and represent as Tablature
@@ -395,6 +423,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
               <strong>Durations:</strong> <code>:w</code> (whole), <code>:h</code> (half), <code>:q</code> (quarter, default), <code>:e</code> (eighth), <code>:s</code> (16th)<br/>
               <strong>Modifiers:</strong> add <code>.</code> for dotted notes, add <code>x</code> to a note (e.g., <code>5/3x</code>) for a ghost note, or use <code>m</code> instead of a fret number (e.g., <code>m/3</code>) for a muted string.<br/>
               <strong>Chords:</strong> join notes with <code>+</code> (e.g., <code>5/3+m/2</code>)<br/>
+              <strong>Measures:</strong> separate measures with <code>|</code><br/>
               <strong>Example:</strong> <code>5/3:e, 7/3:q., 5/2x:s, m/3+5/4:q</code>
             </div>
             <textarea
@@ -409,6 +438,20 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
               className="w-full py-2 bg-zinc-800 hover:bg-zinc-750 active:bg-zinc-900 text-zinc-200 border border-zinc-700 text-xs font-semibold rounded transition-colors cursor-pointer"
             >
               Load Note Sequence
+            </button>
+            <input
+              ref={textFileInputRef}
+              type="file"
+              accept=".txt,text/plain"
+              onChange={handleTextFileImport}
+              className="hidden"
+            />
+            <button
+              onClick={() => textFileInputRef.current?.click()}
+              className="w-full py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-semibold rounded transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <FileUp className="w-4 h-4" />
+              Import Markup from Text File
             </button>
           </div>
 
@@ -456,6 +499,18 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
                 <div className="flex items-center gap-2">
                   <Printer className="w-4 h-4 text-rose-400" />
                   <span>Export as Printable PDF</span>
+                </div>
+                <Download className="w-3.5 h-3.5 opacity-60 text-indigo-400" />
+              </button>
+
+              {/* MIDI download Button */}
+              <button
+                onClick={handleExportText}
+                className="w-full py-2.5 bg-zinc-800 hover:bg-zinc-750 border border-zinc-700 text-zinc-100 rounded text-xs font-semibold flex items-center justify-between px-4 transition-all hover:translate-x-0.5 active:scale-98 cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-cyan-400" />
+                  <span>Export Grid as Text Markup (.txt)</span>
                 </div>
                 <Download className="w-3.5 h-3.5 opacity-60 text-indigo-400" />
               </button>
