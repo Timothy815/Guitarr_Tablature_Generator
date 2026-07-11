@@ -91,7 +91,15 @@ export function groupBeatsIntoMeasures(beats: Beat[], capacity = 4): Measure[] {
 
 export function projectToTextMarkup(project: SongProject): string {
   return project.measures
-    .map((measure) => measure.beats.map((beat) => {
+    .map((measure) => {
+      const annotationParts = [
+        measure.annotation?.rehearsalMark && `rehearsal=${measure.annotation.rehearsalMark}`,
+        measure.annotation?.section && `section=${measure.annotation.section}`,
+        measure.annotation?.lyricCue && `lyric=${measure.annotation.lyricCue}`,
+        measure.annotation?.performanceNote && `note=${measure.annotation.performanceNote}`,
+      ].filter(Boolean);
+      const annotation = annotationParts.length > 0 ? `[${annotationParts.join('; ')}] ` : '';
+      return annotation + measure.beats.map((beat) => {
       const duration = `:${beat.duration}${beat.dotted ? '.' : ''}`;
       if (beat.positions.length === 0) return `x${duration}`;
 
@@ -103,7 +111,8 @@ export function projectToTextMarkup(project: SongProject): string {
         })
         .join('+');
       return `${notes}${duration}`;
-    }).join(', '))
+      }).join(', ');
+    })
     .join(' | ');
 }
 
@@ -133,7 +142,7 @@ export function vexKeyToPitch(keyStr: string): number {
 }
 
 // Generates a well-formatted MusicXML 4.0 string for the project
-export function generateMusicXML(project: SongProject): string {
+export function generateMusicXML(project: SongProject, includeEmptyRests = false): string {
   const bpm = project.bpm;
   const title = escapeXml(project.title || 'Untitled');
   const beatsPerMeasure = project.timeSignature.beats;
@@ -156,9 +165,20 @@ export function generateMusicXML(project: SongProject): string {
   <part id="P1">`;
 
   // Process measures
-  project.measures.forEach((measure, mIdx) => {
+  const exportMeasures = project.measures
+    .map((measure) => ({
+      ...measure,
+      beats: includeEmptyRests ? measure.beats : measure.beats.filter((beat) => beat.positions.length > 0),
+    }))
+    .filter((measure) => measure.beats.length > 0 || Object.values(measure.annotation ?? {}).some(Boolean));
+
+  exportMeasures.forEach((measure, mIdx) => {
+    const durationTicksForBeat = (beat: Beat) => Math.round(durationToQuarterBeats(beat.duration, beat.dotted) * 16);
+    const measureTicks = measure.beats.reduce((total, beat) => total + durationTicksForBeat(beat), 0);
+    const expectedTicks = beatsPerMeasure * (4 / beatType) * 16;
+    const implicitAttribute = measureTicks !== expectedTicks ? ' implicit="yes"' : '';
     xml += `
-    <measure number="${mIdx + 1}">`;
+    <measure number="${mIdx + 1}"${implicitAttribute}>`;
 
     // Only add attributes on first measure
     if (mIdx === 0) {
@@ -214,6 +234,16 @@ export function generateMusicXML(project: SongProject): string {
         </direction-type>
         <sound tempo="${bpm}"/>
       </direction>`;
+    }
+
+    if (measure.annotation?.rehearsalMark) {
+      xml += `
+      <direction placement="above"><direction-type><rehearsal>${escapeXml(measure.annotation.rehearsalMark)}</rehearsal></direction-type></direction>`;
+    }
+    const annotationWords = [measure.annotation?.section, measure.annotation?.lyricCue, measure.annotation?.performanceNote].filter(Boolean).join(' — ');
+    if (annotationWords) {
+      xml += `
+      <direction placement="above"><direction-type><words>${escapeXml(annotationWords)}</words></direction-type></direction>`;
     }
 
     // Process beats in this measure
@@ -323,9 +353,23 @@ export function parseInputToProject(inputStr: string): Partial<SongProject> | nu
 
   // 2. Fret/String comma list (e.g. "5/3, 7/3, 5/2, x, 7/2:q.", "5/3:e")
   // Format is: fret/string[:duration][.][x], where 'x' represents a rest, or multiple notes stacked like '5/3+5/2'
-  if (cleanInput.includes('/') || cleanInput.includes(',') || cleanInput.includes('|') || /^x(?::|$)/i.test(cleanInput)) {
+  if (cleanInput.includes('/') || cleanInput.includes(',') || cleanInput.includes('|') || cleanInput.startsWith('[') || /^x(?::|$)/i.test(cleanInput)) {
     const measureGroups = cleanInput.split('|').map((group) => group.trim()).filter(Boolean);
-    const tokenGroups = measureGroups.map((group) => group.split(',').map((token) => token.trim()));
+    const annotations = measureGroups.map((group) => {
+      const match = group.match(/^\[([^\]]+)\]\s*/);
+      if (!match) return undefined;
+      const fields = Object.fromEntries(match[1].split(';').map((part) => {
+        const [key, ...value] = part.trim().split('=');
+        return [key.trim(), value.join('=').trim()];
+      }));
+      return {
+        rehearsalMark: fields.rehearsal || undefined,
+        section: fields.section || undefined,
+        lyricCue: fields.lyric || undefined,
+        performanceNote: fields.note || undefined,
+      };
+    });
+    const tokenGroups = measureGroups.map((group) => group.replace(/^\[[^\]]+\]\s*/, '').split(',').map((token) => token.trim()));
     const tokens = tokenGroups.flat();
     const beats: Beat[] = tokens.map((token, idx) => {
       // Parse main token and modifiers
@@ -400,7 +444,7 @@ export function parseInputToProject(inputStr: string): Partial<SongProject> | nu
       const measures = tokenGroups.map((group, index) => {
         const measureBeats = beats.slice(cursor, cursor + group.length);
         cursor += group.length;
-        return { id: `m_${index + 1}`, beats: measureBeats };
+        return { id: `m_${index + 1}`, beats: measureBeats, annotation: annotations[index] };
       });
       return { measures };
     }

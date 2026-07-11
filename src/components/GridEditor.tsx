@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SongProject, TabPosition, NoteDuration } from '../types';
+import { SongProject, TabPosition, NoteDuration, Measure } from '../types';
 import { Plus, Trash2, ArrowLeft, ArrowRight, CornerDownLeft } from 'lucide-react';
 
 interface GridEditorProps {
@@ -41,6 +41,23 @@ export const GridEditor: React.FC<GridEditorProps> = ({
   });
 
   const totalBeats = flatBeats.length;
+  const selectedMeasureIndex = flatBeats[selectedBeatIndex]?.measureIdx ?? 0;
+  const selectedMeasure = project.measures[selectedMeasureIndex];
+
+  const updateSelectedMeasureAnnotation = (field: keyof NonNullable<Measure['annotation']>, value: string) => {
+    setProject((previous) => ({
+      ...previous,
+      measures: previous.measures.map((measure, index) => index === selectedMeasureIndex
+        ? {
+            ...measure,
+            annotation: {
+              ...measure.annotation,
+              [field]: value || undefined,
+            },
+          }
+        : measure),
+    }));
+  };
 
   // Clear focused cell if outside clicked
   useEffect(() => {
@@ -366,6 +383,35 @@ export const GridEditor: React.FC<GridEditorProps> = ({
         </div>
       </div>
 
+      {selectedMeasure && (
+        <div className="bg-zinc-950/70 border border-zinc-800 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <h4 className="text-xs font-bold text-zinc-200">Measure {selectedMeasureIndex + 1} cues</h4>
+              <p className="text-[10px] text-zinc-500 mt-0.5">These annotations appear in notation, PDFs, text markup, and MusicXML.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {([
+              ['rehearsalMark', 'Rehearsal mark', 'A'],
+              ['section', 'Section', 'Verse 1'],
+              ['lyricCue', 'Lyric cue', 'Goodbye Albert…'],
+              ['performanceNote', 'Performance note', 'Build gradually'],
+            ] as const).map(([field, label, placeholder]) => (
+              <label key={field} className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{label}</span>
+                <input
+                  value={selectedMeasure.annotation?.[field] ?? ''}
+                  onChange={(event) => updateSelectedMeasureAnnotation(field, event.target.value)}
+                  placeholder={placeholder}
+                  className="bg-zinc-900 border border-zinc-800 rounded px-2.5 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Grid Canvas */}
       <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-700 pb-2">
         <div className="min-w-max flex flex-col gap-[3px]">
@@ -375,15 +421,20 @@ export const GridEditor: React.FC<GridEditorProps> = ({
               String
             </div>
             {project.measures.map((measure, mIdx) => (
-              <div
+              <button
                 key={measure.id}
-                className="flex flex-none border-l border-zinc-800"
+                onClick={() => {
+                  const firstBeat = flatBeats.find((beat) => beat.measureIdx === mIdx);
+                  if (firstBeat) onSelectBeat(firstBeat.absoluteIdx);
+                }}
+                className={`flex flex-none border-l border-zinc-800 text-left ${mIdx === selectedMeasureIndex ? 'bg-indigo-500/10' : 'hover:bg-zinc-800/40'}`}
                 style={{ width: `${measure.beats.length * 40}px` }}
               >
                 <div className="pl-2 font-mono text-xs font-bold text-zinc-400">
                   M.{mIdx + 1}
+                  {Object.values(measure.annotation ?? {}).some(Boolean) && <span className="ml-1 text-indigo-400" title="Measure has cues">●</span>}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 

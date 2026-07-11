@@ -15,7 +15,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
   const [textInput, setTextInput] = useState<string>('5/3, 7/3, 5/2, 5/3, 7/3, 5/2, x, 12/1+12/2+12/3');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [includeMidiRests, setIncludeMidiRests] = useState(false);
+  const [includeEmptyExportRests, setIncludeEmptyExportRests] = useState(false);
   const midiInputRef = useRef<HTMLInputElement>(null);
   const textFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -179,7 +179,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
         measure.beats.forEach((beat) => {
           // Empty grid cells are workspace padding unless the user explicitly
           // chooses to preserve them as timed rests in the MIDI export.
-          if (beat.positions.length === 0 && !includeMidiRests) return;
+          if (beat.positions.length === 0 && !includeEmptyExportRests) return;
 
           // Duration mapping
           let durationString = '8'; // default eighth
@@ -241,7 +241,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
   // Export as MusicXML
   const handleExportMusicXML = () => {
     try {
-      const xmlStr = generateMusicXML(project);
+      const xmlStr = generateMusicXML(project, includeEmptyExportRests);
       const blob = new Blob([xmlStr], { type: 'application/vnd.recordare.musicxml+xml' });
       
       const link = document.createElement('a');
@@ -424,6 +424,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
               <strong>Modifiers:</strong> add <code>.</code> for dotted notes, add <code>x</code> to a note (e.g., <code>5/3x</code>) for a ghost note, or use <code>m</code> instead of a fret number (e.g., <code>m/3</code>) for a muted string.<br/>
               <strong>Chords:</strong> join notes with <code>+</code> (e.g., <code>5/3+m/2</code>)<br/>
               <strong>Measures:</strong> separate measures with <code>|</code><br/>
+              <strong>Cues:</strong> prefix a measure with <code>[rehearsal=A; section=Verse; lyric=Hello; note=Build]</code><br/>
               <strong>Example:</strong> <code>5/3:e, 7/3:q., 5/2x:s, m/3+5/4:q</code>
             </div>
             <textarea
@@ -530,13 +531,13 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
               <label className="flex items-start gap-2 px-1 text-[10px] text-zinc-400 leading-relaxed cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={includeMidiRests}
-                  onChange={(event) => setIncludeMidiRests(event.target.checked)}
+                  checked={includeEmptyExportRests}
+                  onChange={(event) => setIncludeEmptyExportRests(event.target.checked)}
                   className="mt-0.5 accent-indigo-500"
                 />
                 <span>
-                  Include empty grid cells as MIDI rests
-                  <span className="block text-zinc-600">Off by default so unused cells do not add silence between written notes.</span>
+                  Include empty grid cells as MIDI/MusicXML rests
+                  <span className="block text-zinc-600">Off by default so unused cells do not add silence or playback pauses.</span>
                 </span>
               </label>
 

@@ -89,6 +89,21 @@ export const NotationCanvas: React.FC<NotationCanvasProps> = ({
       }
       tabStave.setContext(context).draw();
 
+      const annotation = measure.annotation;
+      if (annotation && Object.values(annotation).some(Boolean)) {
+        const cue = [
+          annotation.rehearsalMark ? `[${annotation.rehearsalMark}]` : '',
+          annotation.section,
+          annotation.lyricCue,
+          annotation.performanceNote,
+        ].filter(Boolean).join(' · ');
+        context.save();
+        context.setFillStyle('#3f3f46');
+        context.setFont('Arial', 9, annotation.rehearsalMark ? 'bold' : 'normal');
+        context.fillText(cue.length > 42 ? `${cue.slice(0, 41)}…` : cue, currentX + (isFirst ? 100 : 8), 13);
+        context.restore();
+      }
+
       // 3. Connect staves with line and bracket
       if (isFirst) {
         const connectorBracket = new StaveConnector(stave, tabStave);

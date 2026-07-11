@@ -17,6 +17,12 @@ export interface Beat {
 export interface Measure {
   id: string;
   beats: Beat[]; // For 4/4 time signature, if grid is eighths, we have 8 beats
+  annotation?: {
+    rehearsalMark?: string;
+    section?: string;
+    lyricCue?: string;
+    performanceNote?: string;
+  };
 }
 
 export type InstrumentType = 'acoustic' | 'electric' | 'synth' | 'distorted';
