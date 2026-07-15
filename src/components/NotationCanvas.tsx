@@ -83,6 +83,13 @@ export const NotationCanvas: React.FC<NotationCanvasProps> = ({
       }
       tabStave.setContext(context).draw();
 
+      // VexFlow offsets each voice from its own stave's note-start position.
+      // The treble clef and time signature make the standard stave start later
+      // than TAB in measure one, so normalize both starts before formatting.
+      const sharedNoteStartX = Math.max(stave.getNoteStartX(), tabStave.getNoteStartX());
+      stave.setNoteStartX(sharedNoteStartX);
+      tabStave.setNoteStartX(sharedNoteStartX);
+
       const annotation = measure.annotation;
       if (annotation && Object.values(annotation).some(Boolean)) {
         const cue = [

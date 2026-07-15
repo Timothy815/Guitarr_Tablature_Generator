@@ -275,6 +275,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
       const pageMargin = 40;
       const headerHeight = 62;
       const systemGap = 18;
+      const closingBarlineOverlap = 2;
       const fallbackLayout = buildNotationLayout(project.measures);
       let notationLayout = fallbackLayout;
       try {
@@ -342,7 +343,7 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
           .reduce((total, width) => total + width, 0);
         const logicalCropWidth = measuresWidth
           + (startMeasure === 0 ? NOTATION_CANVAS_PADDING : 0)
-          + (isFinalSystem ? NOTATION_CANVAS_PADDING : 0);
+          + (isFinalSystem ? NOTATION_CANVAS_PADDING : closingBarlineOverlap);
         const sourceX = Math.round(logicalStartX * scaleX);
         const sourceWidth = Math.min(
           canvasElement.width - sourceX,
