@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Renderer, Stave, TabStave, StaveNote, TabNote, Formatter, Voice, Accidental, StaveConnector, GhostNote, Dot, Barline } from 'vexflow';
 import { SongProject } from '../types';
 import { guitarNoteToPitch, pitchToVexKey } from '../utils/notation';
+import { buildNotationLayout, NOTATION_CANVAS_HEIGHT } from '../utils/notationLayout';
 
 interface NotationCanvasProps {
   project: SongProject;
@@ -38,19 +39,12 @@ export const NotationCanvas: React.FC<NotationCanvasProps> = ({
     const measures = project.measures;
     if (measures.length === 0) return;
 
-    // Calculate canvas size
-    // Measure 1 needs extra space for clefs and key signatures
-    const firstMeasureWidth = 260;
-    const regularMeasureWidth = 200;
-    const padding = 20;
-    
-    // We can lay them out continuously in a horizontal scrollable view
-    let canvasWidth = firstMeasureWidth + (measures.length - 1) * regularMeasureWidth + padding * 2;
-    if (measures.length === 1) {
-      canvasWidth = firstMeasureWidth + padding * 2;
-    }
-    
-    const canvasHeight = 240;
+    // Give dense measures more room for accidentals and multi-digit frets.
+    // The same boundaries are exposed on the canvas for measure-aligned PDF crops.
+    const layout = buildNotationLayout(measures);
+    const canvasWidth = layout.totalWidth;
+    const canvasHeight = NOTATION_CANVAS_HEIGHT;
+    canvasRef.current.dataset.notationLayout = JSON.stringify(layout);
 
     // Create VexFlow Renderer
     const renderer = new Renderer(canvasRef.current, Renderer.Backends.CANVAS);
@@ -66,12 +60,12 @@ export const NotationCanvas: React.FC<NotationCanvasProps> = ({
       nativeCtx.restore();
     }
 
-    let currentX = padding;
     let flatBeatCounter = 0;
 
     measures.forEach((measure, mIdx) => {
       const isFirst = mIdx === 0;
-      const measureWidth = isFirst ? firstMeasureWidth : regularMeasureWidth;
+      const currentX = layout.measureStarts[mIdx];
+      const measureWidth = layout.measureWidths[mIdx];
 
       // 1. Create standard stave
       const stave = new Stave(currentX, 20, measureWidth);
@@ -245,14 +239,13 @@ export const NotationCanvas: React.FC<NotationCanvasProps> = ({
         formatter
           .joinVoices([voiceStaff])
           .joinVoices([voiceTab])
-          .format([voiceStaff, voiceTab], measureWidth - (isFirst ? 80 : 30));
+          .formatToStave([voiceStaff, voiceTab], stave);
 
         // Draw voices on their respective staves
         voiceStaff.draw(context, stave);
         voiceTab.draw(context, tabStave);
       }
 
-      currentX += measureWidth;
     });
   }, [project, activeBeatIndex]);
 

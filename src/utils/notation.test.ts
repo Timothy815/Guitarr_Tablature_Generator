@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canTransposeProject, durationToQuarterBeats, escapeXml, generateMusicXML, guitarNoteToPitch, parseInputToProject, projectToTextMarkup, transposeProject } from './notation';
 import type { SongProject } from '../types';
+import { buildNotationLayout, getNotationMeasureWidth, NOTATION_CANVAS_PADDING } from './notationLayout';
 
 describe('notation timing', () => {
   it('calculates plain and dotted note lengths', () => {
@@ -127,5 +128,33 @@ describe('tablature transposition', () => {
     };
     expect(canTransposeProject(lowProject, -1)).toBe(false);
     expect(transposeProject(lowProject, -1)).toBeNull();
+  });
+});
+
+describe('notation layout', () => {
+  it('gives dense accidental-heavy measures more horizontal space', () => {
+    const sparse = { id: 'sparse', beats: [{ id: 'r', duration: 'q' as const, positions: [] }] };
+    const dense = {
+      id: 'dense',
+      beats: Array.from({ length: 8 }, (_, index) => ({
+        id: `b${index}`,
+        duration: 'e' as const,
+        positions: [{ string: 1, fret: index % 2 === 0 ? 2 : 4 }],
+      })),
+    };
+
+    expect(getNotationMeasureWidth(dense, false)).toBeGreaterThan(getNotationMeasureWidth(sparse, false));
+  });
+
+  it('builds contiguous measure boundaries with outer canvas padding', () => {
+    const measures = [
+      { id: 'm1', beats: [{ id: 'b1', duration: 'q' as const, positions: [] }] },
+      { id: 'm2', beats: [{ id: 'b2', duration: 'q' as const, positions: [] }] },
+    ];
+    const layout = buildNotationLayout(measures);
+
+    expect(layout.measureStarts[0]).toBe(NOTATION_CANVAS_PADDING);
+    expect(layout.measureStarts[1]).toBe(layout.measureStarts[0] + layout.measureWidths[0]);
+    expect(layout.totalWidth).toBe(layout.measureStarts[1] + layout.measureWidths[1] + NOTATION_CANVAS_PADDING);
   });
 });

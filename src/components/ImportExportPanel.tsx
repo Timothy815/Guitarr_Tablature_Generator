@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { SongProject, Beat, Measure, TabPosition, NoteDuration } from '../types';
 import { parseInputToProject, generateMusicXML, pitchToGuitarNote, projectToTextMarkup } from '../utils/notation';
+import { buildNotationLayout, NOTATION_CANVAS_PADDING, PDF_MEASURES_PER_SYSTEM, PDF_REPEATED_CLEF_WIDTH } from '../utils/notationLayout';
 import { FileUp, FileDown, FileText, Code, CheckCircle, Download, Printer } from 'lucide-react';
 
 interface ImportExportPanelProps {
@@ -270,20 +271,34 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
       }
 
       // Lay the continuous editor canvas out as measure-aligned systems on
-      // standard US Letter pages. The notation canvas uses one 260px opening
-      // measure, 200px following measures, and 20px outer padding.
+      // standard US Letter pages using the renderer's measured boundaries.
       const pageMargin = 40;
       const headerHeight = 62;
       const systemGap = 18;
-      const measuresPerSystem = 3;
-      const firstMeasureWidth = 260;
-      const regularMeasureWidth = 200;
-      const canvasPadding = 20;
-      const repeatedClefWidth = 85;
-      const logicalCanvasWidth = firstMeasureWidth
-        + Math.max(0, project.measures.length - 1) * regularMeasureWidth
-        + canvasPadding * 2;
-      const scaleX = canvasElement.width / logicalCanvasWidth;
+      const fallbackLayout = buildNotationLayout(project.measures);
+      let notationLayout = fallbackLayout;
+      try {
+        if (canvasElement.dataset.notationLayout) {
+          notationLayout = JSON.parse(canvasElement.dataset.notationLayout) as typeof fallbackLayout;
+        }
+      } catch {
+        notationLayout = fallbackLayout;
+      }
+      const scaleX = canvasElement.width / notationLayout.totalWidth;
+
+      const systemLogicalWidths: number[] = [];
+      for (let start = 0; start < project.measures.length; start += PDF_MEASURES_PER_SYSTEM) {
+        const count = Math.min(PDF_MEASURES_PER_SYSTEM, project.measures.length - start);
+        const measuresWidth = notationLayout.measureWidths
+          .slice(start, start + count)
+          .reduce((total, width) => total + width, 0);
+        systemLogicalWidths.push(
+          measuresWidth
+            + (start === 0 ? NOTATION_CANVAS_PADDING : PDF_REPEATED_CLEF_WIDTH)
+            + (start + count >= project.measures.length ? NOTATION_CANVAS_PADDING : 0),
+        );
+      }
+      const widestSystem = Math.max(...systemLogicalWidths);
 
       const { jsPDF } = await import('jspdf');
       const pdf = new jsPDF({
@@ -316,22 +331,25 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
 
       drawPageHeader();
 
-      for (let startMeasure = 0; startMeasure < project.measures.length; startMeasure += measuresPerSystem) {
-        const count = Math.min(measuresPerSystem, project.measures.length - startMeasure);
+      for (let startMeasure = 0; startMeasure < project.measures.length; startMeasure += PDF_MEASURES_PER_SYSTEM) {
+        const count = Math.min(PDF_MEASURES_PER_SYSTEM, project.measures.length - startMeasure);
         const isFinalSystem = startMeasure + count >= project.measures.length;
         const logicalStartX = startMeasure === 0
           ? 0
-          : canvasPadding + firstMeasureWidth + (startMeasure - 1) * regularMeasureWidth;
-        const logicalCropWidth = startMeasure === 0
-          ? canvasPadding + firstMeasureWidth + (count - 1) * regularMeasureWidth + (isFinalSystem ? canvasPadding : 0)
-          : count * regularMeasureWidth + (isFinalSystem ? canvasPadding : 0);
+          : notationLayout.measureStarts[startMeasure];
+        const measuresWidth = notationLayout.measureWidths
+          .slice(startMeasure, startMeasure + count)
+          .reduce((total, width) => total + width, 0);
+        const logicalCropWidth = measuresWidth
+          + (startMeasure === 0 ? NOTATION_CANVAS_PADDING : 0)
+          + (isFinalSystem ? NOTATION_CANVAS_PADDING : 0);
         const sourceX = Math.round(logicalStartX * scaleX);
         const sourceWidth = Math.min(
           canvasElement.width - sourceX,
           Math.round(logicalCropWidth * scaleX),
         );
 
-        const prefixWidth = startMeasure === 0 ? 0 : Math.round(repeatedClefWidth * scaleX);
+        const prefixWidth = startMeasure === 0 ? 0 : Math.round(PDF_REPEATED_CLEF_WIDTH * scaleX);
         const systemCanvas = document.createElement('canvas');
         systemCanvas.width = prefixWidth + sourceWidth;
         systemCanvas.height = canvasElement.height;
@@ -356,9 +374,8 @@ export const ImportExportPanel: React.FC<ImportExportPanelProps> = ({
         }
         systemContext.drawImage(canvasElement, sourceX, 0, sourceWidth, canvasElement.height, prefixWidth, 0, sourceWidth, canvasElement.height);
 
-        const fullSystemWidth = canvasPadding + measuresPerSystem * regularMeasureWidth;
-        const logicalSystemWidth = logicalCropWidth + (startMeasure === 0 ? 0 : repeatedClefWidth);
-        const renderedWidth = contentWidth * Math.min(1, logicalSystemWidth / fullSystemWidth);
+        const logicalSystemWidth = logicalCropWidth + (startMeasure === 0 ? 0 : PDF_REPEATED_CLEF_WIDTH);
+        const renderedWidth = contentWidth * Math.min(1, logicalSystemWidth / widestSystem);
         const renderedHeight = renderedWidth * (systemCanvas.height / systemCanvas.width);
         if (y + renderedHeight > pageHeight - pageMargin) {
           pdf.addPage();
