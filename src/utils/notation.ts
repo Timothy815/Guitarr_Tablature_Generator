@@ -48,6 +48,102 @@ export function pitchToGuitarNote(pitch: number, previousFret?: number): TabPosi
   return candidates[0];
 }
 
+function playablePositionsForPitch(pitch: number): TabPosition[] {
+  return GUITAR_TUNING_PITCHES.flatMap((openPitch, index) => {
+    const fret = pitch - openPitch;
+    return fret >= 0 && fret <= 24 ? [{ string: index + 1, fret }] : [];
+  });
+}
+
+function transposePositions(positions: TabPosition[], semitones: number): TabPosition[] | null {
+  const fixedStrings = new Set(positions.filter((position) => position.mute).map((position) => position.string));
+  const pitched = positions
+    .map((position, index) => ({ position, index }))
+    .filter(({ position }) => !position.mute)
+    .map(({ position, index }) => ({
+      position,
+      index,
+      candidates: playablePositionsForPitch(guitarNoteToPitch(position.string, position.fret) + semitones)
+        .filter((candidate) => !fixedStrings.has(candidate.string))
+        .map((candidate) => ({
+          candidate,
+          cost: (candidate.string === position.string ? 0 : 100) + Math.abs(candidate.fret - position.fret),
+        }))
+        .sort((a, b) => a.cost - b.cost),
+    }))
+    .sort((a, b) => a.candidates.length - b.candidates.length);
+
+  if (pitched.some(({ candidates }) => candidates.length === 0)) return null;
+
+  let bestCost = Number.POSITIVE_INFINITY;
+  let bestAssignments: Array<{ index: number; candidate: TabPosition }> | null = null;
+
+  const assign = (
+    noteIndex: number,
+    occupiedStrings: Set<number>,
+    assignments: Array<{ index: number; candidate: TabPosition }>,
+    cost: number,
+  ) => {
+    if (cost >= bestCost) return;
+    if (noteIndex === pitched.length) {
+      bestCost = cost;
+      bestAssignments = [...assignments];
+      return;
+    }
+
+    const note = pitched[noteIndex];
+    for (const option of note.candidates) {
+      if (occupiedStrings.has(option.candidate.string)) continue;
+      occupiedStrings.add(option.candidate.string);
+      assignments.push({ index: note.index, candidate: option.candidate });
+      assign(noteIndex + 1, occupiedStrings, assignments, cost + option.cost);
+      assignments.pop();
+      occupiedStrings.delete(option.candidate.string);
+    }
+  };
+
+  assign(0, new Set(fixedStrings), [], 0);
+  if (!bestAssignments) return null;
+
+  const assignmentByIndex = new Map(
+    (bestAssignments as Array<{ index: number; candidate: TabPosition }>).map(({ index, candidate }) => [index, candidate]),
+  );
+  return positions.map((position, index) => position.mute
+    ? { ...position }
+    : { ...position, ...assignmentByIndex.get(index)! });
+}
+
+/**
+ * Transpose every pitched note while keeping the result playable on a
+ * standard six-string guitar. Notes stay on their current string whenever
+ * possible and are moved to another string only at a fretboard boundary.
+ * Muted strings are left unchanged because they have no definite pitch.
+ */
+export function transposeProject(project: SongProject, semitones: number): SongProject | null {
+  if (semitones === 0) return project;
+
+  const nextMeasures: Measure[] = [];
+
+  for (const measure of project.measures) {
+    const nextBeats: Beat[] = [];
+
+    for (const beat of measure.beats) {
+      const nextPositions = transposePositions(beat.positions, semitones);
+      if (!nextPositions) return null;
+
+      nextBeats.push({ ...beat, positions: nextPositions });
+    }
+
+    nextMeasures.push({ ...measure, beats: nextBeats });
+  }
+
+  return { ...project, measures: nextMeasures };
+}
+
+export function canTransposeProject(project: SongProject, semitones: number): boolean {
+  return transposeProject(project, semitones) !== null;
+}
+
 const NOTE_NAMES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
 
 export function escapeXml(value: string): string {

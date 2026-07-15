@@ -4,8 +4,9 @@ import { NotationCanvas } from './components/NotationCanvas';
 import { GridEditor } from './components/GridEditor';
 import { TapRecorder } from './components/TapRecorder';
 import { AudioPlaybackEngine } from './utils/audio';
+import { canTransposeProject, transposeProject } from './utils/notation';
 import { useProjectHistory } from './hooks/useProjectHistory';
-import { Play, Pause, RotateCcw, HelpCircle, Activity, Undo2, Redo2, Repeat2, Save } from 'lucide-react';
+import { Play, Pause, RotateCcw, HelpCircle, Activity, Undo2, Redo2, Repeat2, Save, Minus, Plus } from 'lucide-react';
 
 const ImportExportPanel = lazy(() => import('./components/ImportExportPanel').then((module) => ({ default: module.ImportExportPanel })));
 
@@ -206,6 +207,13 @@ export default function App() {
     setProject((prev) => ({ ...prev, title: newTitle || 'Untitled' }));
   };
 
+  const handleTranspose = (semitones: number) => {
+    setProject((previous) => transposeProject(previous, semitones) ?? previous);
+  };
+
+  const canTransposeDown = canTransposeProject(project, -1);
+  const canTransposeUp = canTransposeProject(project, 1);
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans pb-28 md:pb-12">
       
@@ -384,6 +392,32 @@ export default function App() {
             </button>
           </div>
 
+          <div className="flex items-end gap-5 w-full md:w-auto">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider font-mono">Transpose</span>
+              <div className="flex items-center rounded border border-zinc-700 overflow-hidden bg-zinc-950">
+                <button
+                  onClick={() => handleTranspose(-1)}
+                  disabled={!canTransposeDown}
+                  className="w-9 h-8 flex items-center justify-center text-zinc-300 hover:bg-indigo-600 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-300 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  aria-label="Transpose tablature down one semitone"
+                  title={canTransposeDown ? 'Transpose down one semitone' : 'Cannot transpose below the guitar’s playable range'}
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="h-8 px-2 flex items-center border-x border-zinc-800 text-[10px] font-bold text-indigo-400 font-mono" aria-hidden="true">½ STEP</span>
+                <button
+                  onClick={() => handleTranspose(1)}
+                  disabled={!canTransposeUp}
+                  className="w-9 h-8 flex items-center justify-center text-zinc-300 hover:bg-indigo-600 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-300 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  aria-label="Transpose tablature up one semitone"
+                  title={canTransposeUp ? 'Transpose up one semitone' : 'Cannot transpose above the guitar’s playable range'}
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
           {/* BPM Adjustable Tempo Slider */}
           <div className="flex flex-col gap-1.5 w-full md:w-56">
             <div className="flex items-center justify-between text-[10px] font-bold text-zinc-500 uppercase tracking-wider font-mono">
@@ -402,6 +436,7 @@ export default function App() {
               />
               <span className="text-[10px] font-bold text-zinc-600 font-mono">Presto</span>
             </div>
+          </div>
           </div>
 
         </div>

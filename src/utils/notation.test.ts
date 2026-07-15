@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { durationToQuarterBeats, escapeXml, generateMusicXML, parseInputToProject, projectToTextMarkup } from './notation';
+import { canTransposeProject, durationToQuarterBeats, escapeXml, generateMusicXML, guitarNoteToPitch, parseInputToProject, projectToTextMarkup, transposeProject } from './notation';
 import type { SongProject } from '../types';
 
 describe('notation timing', () => {
@@ -79,5 +79,53 @@ describe('plain-text markup', () => {
     expect(withoutPadding).not.toContain('<rest/>');
     expect(withoutPadding).toContain('<measure number="1" implicit="yes">');
     expect(generateMusicXML(project, true)).toContain('<rest/>');
+  });
+});
+
+describe('tablature transposition', () => {
+  const project: SongProject = {
+    title: 'Transpose', bpm: 120, instrument: 'electric', timeSignature: { beats: 4, beatType: 4 },
+    measures: [{ id: 'm1', beats: [{
+      id: 'b1', duration: 'q', positions: [
+        { string: 1, fret: 3 },
+        { string: 2, fret: 0, ghost: true },
+        { string: 6, fret: 5, mute: true },
+      ],
+    }] }],
+  };
+
+  it('moves every pitched note by one semitone and preserves modifiers', () => {
+    const transposed = transposeProject(project, 1);
+    expect(transposed).not.toBeNull();
+
+    const originalPitches = project.measures[0].beats[0].positions
+      .filter((position) => !position.mute)
+      .map((position) => guitarNoteToPitch(position.string, position.fret));
+    const transposedPositions = transposed!.measures[0].beats[0].positions;
+    const transposedPitches = transposedPositions
+      .filter((position) => !position.mute)
+      .map((position) => guitarNoteToPitch(position.string, position.fret));
+
+    expect(transposedPitches).toEqual(originalPitches.map((pitch) => pitch + 1));
+    expect(transposedPositions[1].ghost).toBe(true);
+    expect(transposedPositions[2]).toEqual(project.measures[0].beats[0].positions[2]);
+  });
+
+  it('re-strings an open note when transposing down at a string boundary', () => {
+    const transposed = transposeProject(project, -1)!;
+    const original = project.measures[0].beats[0].positions[1];
+    const result = transposed.measures[0].beats[0].positions[1];
+
+    expect(result.string).not.toBe(original.string);
+    expect(guitarNoteToPitch(result.string, result.fret)).toBe(guitarNoteToPitch(original.string, original.fret) - 1);
+  });
+
+  it('disables transposition beyond the guitar range', () => {
+    const lowProject: SongProject = {
+      ...project,
+      measures: [{ id: 'm1', beats: [{ id: 'low', duration: 'q', positions: [{ string: 6, fret: 0 }] }] }],
+    };
+    expect(canTransposeProject(lowProject, -1)).toBe(false);
+    expect(transposeProject(lowProject, -1)).toBeNull();
   });
 });
