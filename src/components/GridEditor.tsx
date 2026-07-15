@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SongProject, TabPosition, NoteDuration, Measure } from '../types';
-import { Plus, Trash2, ArrowLeft, ArrowRight, CornerDownLeft } from 'lucide-react';
+import { clearProjectTablature } from '../utils/notation';
+import { Plus, Trash2, ArrowLeft, ArrowRight, CornerDownLeft, Eraser } from 'lucide-react';
 
 interface GridEditorProps {
   project: SongProject;
@@ -41,6 +42,7 @@ export const GridEditor: React.FC<GridEditorProps> = ({
   });
 
   const totalBeats = flatBeats.length;
+  const hasTablatureNotes = flatBeats.some((beat) => beat.positions.length > 0);
   const selectedMeasureIndex = flatBeats[selectedBeatIndex]?.measureIdx ?? 0;
   const selectedMeasure = project.measures[selectedMeasureIndex];
 
@@ -344,6 +346,17 @@ export const GridEditor: React.FC<GridEditorProps> = ({
     setFocusedCell(null);
   };
 
+  const clearTablature = () => {
+    if (!hasTablatureNotes) return;
+    const confirmed = window.confirm(
+      'Clear every fret from the tablature grid? Measures, rhythm, and song settings will be kept. You can undo this action afterward.',
+    );
+    if (!confirmed) return;
+
+    setProject((previous) => clearProjectTablature(previous));
+    setFocusedCell(null);
+  };
+
   const stringLabels = ['E', 'B', 'G', 'D', 'A', 'E'];
   const stringColors = [
     'text-rose-500 bg-rose-50 border-rose-200/50',
@@ -365,6 +378,15 @@ export const GridEditor: React.FC<GridEditorProps> = ({
         </div>
         
         <div className="flex items-center gap-2">
+          <button
+            onClick={clearTablature}
+            disabled={!hasTablatureNotes}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-rose-500/15 disabled:opacity-40 disabled:hover:bg-zinc-800 text-rose-400 border border-zinc-700/80 hover:border-rose-500/40 text-xs font-medium rounded transition-colors cursor-pointer disabled:cursor-not-allowed"
+            title="Clear every fret from the grid"
+          >
+            <Eraser className="w-3.5 h-3.5" />
+            Clear Grid
+          </button>
           <button
             onClick={addMeasure}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded transition-colors active:scale-95 cursor-pointer"

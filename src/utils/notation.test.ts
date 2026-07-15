@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canTransposeProject, durationToQuarterBeats, escapeXml, generateMusicXML, guitarNoteToPitch, parseInputToProject, projectToTextMarkup, transposeProject } from './notation';
+import { canTransposeProject, clearProjectTablature, durationToQuarterBeats, escapeXml, generateMusicXML, guitarNoteToPitch, parseInputToProject, projectToTextMarkup, transposeProject } from './notation';
 import type { SongProject } from '../types';
 import { buildNotationLayout, getNotationMeasureWidth, NOTATION_CANVAS_PADDING, PDF_REPEATED_CLEF_WIDTH } from './notationLayout';
 
@@ -160,5 +160,35 @@ describe('notation layout', () => {
 
   it('keeps the repeated PDF clef crop clear of the first note area', () => {
     expect(PDF_REPEATED_CLEF_WIDTH).toBeLessThan(70);
+  });
+});
+
+describe('clear tablature', () => {
+  it('clears all positions while preserving the project and beat structure', () => {
+    const project: SongProject = {
+      title: 'Keep Me',
+      bpm: 96,
+      instrument: 'acoustic',
+      timeSignature: { beats: 3, beatType: 4 },
+      measures: [{
+        id: 'm1',
+        annotation: { section: 'Verse' },
+        beats: [{ id: 'b1', duration: 'q', dotted: true, positions: [{ string: 4, fret: 7, ghost: true }] }],
+      }],
+    };
+
+    const cleared = clearProjectTablature(project);
+    expect(cleared).toMatchObject({
+      title: 'Keep Me',
+      bpm: 96,
+      instrument: 'acoustic',
+      timeSignature: { beats: 3, beatType: 4 },
+      measures: [{
+        id: 'm1',
+        annotation: { section: 'Verse' },
+        beats: [{ id: 'b1', duration: 'q', dotted: true, positions: [] }],
+      }],
+    });
+    expect(project.measures[0].beats[0].positions).toHaveLength(1);
   });
 });

@@ -144,6 +144,16 @@ export function canTransposeProject(project: SongProject, semitones: number): bo
   return transposeProject(project, semitones) !== null;
 }
 
+export function clearProjectTablature(project: SongProject): SongProject {
+  return {
+    ...project,
+    measures: project.measures.map((measure) => ({
+      ...measure,
+      beats: measure.beats.map((beat) => ({ ...beat, positions: [] })),
+    })),
+  };
+}
+
 const NOTE_NAMES = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
 
 export function escapeXml(value: string): string {
