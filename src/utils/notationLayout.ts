@@ -4,7 +4,9 @@ import { guitarNoteToPitch } from './notation';
 export const NOTATION_CANVAS_PADDING = 20;
 export const NOTATION_CANVAS_HEIGHT = 240;
 export const PDF_MEASURES_PER_SYSTEM = 3;
-export const PDF_REPEATED_CLEF_WIDTH = 105;
+// Crop only the opening bracket and clefs when building later PDF systems.
+// A wider crop reaches the first formatted note and duplicates it in print.
+export const PDF_REPEATED_CLEF_WIDTH = 64;
 
 export interface NotationLayout {
   measureStarts: number[];

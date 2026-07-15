@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canTransposeProject, durationToQuarterBeats, escapeXml, generateMusicXML, guitarNoteToPitch, parseInputToProject, projectToTextMarkup, transposeProject } from './notation';
 import type { SongProject } from '../types';
-import { buildNotationLayout, getNotationMeasureWidth, NOTATION_CANVAS_PADDING } from './notationLayout';
+import { buildNotationLayout, getNotationMeasureWidth, NOTATION_CANVAS_PADDING, PDF_REPEATED_CLEF_WIDTH } from './notationLayout';
 
 describe('notation timing', () => {
   it('calculates plain and dotted note lengths', () => {
@@ -156,5 +156,9 @@ describe('notation layout', () => {
     expect(layout.measureStarts[0]).toBe(NOTATION_CANVAS_PADDING);
     expect(layout.measureStarts[1]).toBe(layout.measureStarts[0] + layout.measureWidths[0]);
     expect(layout.totalWidth).toBe(layout.measureStarts[1] + layout.measureWidths[1] + NOTATION_CANVAS_PADDING);
+  });
+
+  it('keeps the repeated PDF clef crop clear of the first note area', () => {
+    expect(PDF_REPEATED_CLEF_WIDTH).toBeLessThan(70);
   });
 });
